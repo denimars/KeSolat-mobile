@@ -182,17 +182,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const SizedBox(height: 24),
 
-              // Background service section
-              _buildSectionTitle('Layanan Latar Belakang'),
+              // Alarm section
+              _buildSectionTitle('Alarm Waktu Sholat'),
               _buildCard(
                 children: [
                   SwitchListTile(
-                    secondary: const Icon(Icons.sync, color: AppColors.primary),
-                    title: const Text('Layanan Latar Belakang'),
+                    secondary: const Icon(Icons.alarm, color: AppColors.primary),
+                    title: const Text('Aktifkan Alarm Adzan'),
                     subtitle: Text(
                       settings.isBackgroundServiceRunning
-                          ? 'Berjalan - adzan akan diputar otomatis'
-                          : 'Nonaktif',
+                          ? 'Aktif - adzan akan berbunyi saat waktu sholat'
+                          : 'Nonaktif - alarm tidak dijadwalkan',
                       style: const TextStyle(color: AppColors.textSecondary),
                     ),
                     value: settings.isBackgroundServiceRunning,

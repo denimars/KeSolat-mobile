@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../domain/entities/prayer_time.dart';
 import '../../../domain/entities/daily_prayer_schedule.dart';
+import '../../../services/notification_service.dart';
 import '../../providers/prayer_provider.dart';
 import '../../widgets/countdown_widget.dart';
 import '../../widgets/prayer_card.dart';
@@ -16,11 +19,48 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  bool _isAdhanPlaying = false;
+  Timer? _adhanCheckTimer;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<PrayerProvider>().initialize();
+    });
+    _startAdhanCheck();
+  }
+
+  @override
+  void dispose() {
+    _adhanCheckTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startAdhanCheck() {
+    // Check immediately
+    _checkAdhanStatus();
+    // Then check periodically
+    _adhanCheckTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      _checkAdhanStatus();
+    });
+  }
+
+  Future<void> _checkAdhanStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    final isPlaying = prefs.getBool('adhan_is_playing') ?? false;
+    if (isPlaying != _isAdhanPlaying) {
+      setState(() {
+        _isAdhanPlaying = isPlaying;
+      });
+    }
+  }
+
+  Future<void> _stopAdhan() async {
+    final notificationService = NotificationService();
+    await notificationService.stopAdhanAndCancelNotification();
+    setState(() {
+      _isAdhanPlaying = false;
     });
   }
 
@@ -148,6 +188,83 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildAdhanPlayingBanner() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [AppColors.primary, AppColors.secondaryButton],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.2),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.volume_up,
+              color: Colors.white,
+              size: 28,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Adzan Sedang Berkumandang',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Ketuk tombol untuk menghentikan',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.8),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ElevatedButton(
+            onPressed: _stopAdhan,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: AppColors.primary,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text(
+              'Stop',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPrayerTimesView(BuildContext context, PrayerProvider provider) {
     final schedule = provider.todaySchedule!;
     final now = DateTime.now();
@@ -160,6 +277,9 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Adhan playing banner
+            if (_isAdhanPlaying) _buildAdhanPlayingBanner(),
+
             // Location info
             Row(
               children: [

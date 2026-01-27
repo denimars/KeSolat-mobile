@@ -52,6 +52,17 @@ class SettingsProvider extends ChangeNotifier {
     _adhanEnabled = enabled;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(AppConstants.keyAdhanEnabled, enabled);
+
+    // Reschedule alarms based on new setting
+    if (_isBackgroundServiceRunning) {
+      if (enabled) {
+        await _backgroundService.scheduleAllPrayerAlarms();
+      } else {
+        await _backgroundService.cancelAllAlarms();
+        _isBackgroundServiceRunning = false;
+      }
+    }
+
     notifyListeners();
   }
 
@@ -72,6 +83,12 @@ class SettingsProvider extends ChangeNotifier {
     _calculationMethod = method;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(AppConstants.keyCalculationMethod, method);
+
+    // Reschedule alarms with new calculation method
+    if (_isBackgroundServiceRunning) {
+      await _backgroundService.scheduleAllPrayerAlarms();
+    }
+
     notifyListeners();
   }
 

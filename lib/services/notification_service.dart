@@ -1,8 +1,10 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_data;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../core/constants/app_constants.dart';
 import '../domain/entities/prayer_time.dart';
+import 'audio_service.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -79,7 +81,29 @@ class NotificationService {
   }
 
   void _onNotificationTapped(NotificationResponse response) {
-    // Handle notification tap
+    // Handle notification tap or action
+    if (response.actionId == 'stop_adhan') {
+      _stopAdhan();
+    }
+  }
+
+  Future<void> _stopAdhan() async {
+    // Stop audio
+    final audioService = AdhanAudioService();
+    await audioService.initialize();
+    await audioService.stopAdhan();
+
+    // Clear playing flag
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('adhan_is_playing', false);
+
+    // Cancel the ongoing notification
+    await cancelNotification(AppConstants.adhanNotificationId);
+  }
+
+  /// Public method to stop adhan from anywhere in the app
+  Future<void> stopAdhanAndCancelNotification() async {
+    await _stopAdhan();
   }
 
   Future<bool> requestPermission() async {
@@ -140,6 +164,15 @@ class NotificationService {
       visibility: NotificationVisibility.public,
       autoCancel: false,
       ongoing: true,
+      actions: <AndroidNotificationAction>[
+        AndroidNotificationAction(
+          'stop_adhan',
+          'Stop Adzan',
+          icon: DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
+          showsUserInterface: true,
+          cancelNotification: true,
+        ),
+      ],
     );
 
     const iosDetails = DarwinNotificationDetails(
@@ -154,8 +187,9 @@ class NotificationService {
       iOS: iosDetails,
     );
 
+    // Use constant ID for adhan notification so we can cancel it
     await _notifications.show(
-      id,
+      AppConstants.adhanNotificationId,
       'Waktu $prayerName',
       'Saatnya menunaikan sholat $prayerName',
       details,

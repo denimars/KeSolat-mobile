@@ -58,8 +58,8 @@ class _MainScreenState extends State<MainScreen> {
           ),
           items: const [
             BottomNavigationBarItem(
-              icon: Icon(Icons.mosque_outlined),
-              activeIcon: Icon(Icons.mosque),
+              icon: Icon(Icons.access_time),
+              activeIcon: Icon(Icons.access_time_filled),
               label: 'Waktu Sholat',
             ),
             BottomNavigationBarItem(

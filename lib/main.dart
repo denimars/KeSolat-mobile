@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/theme/app_theme.dart';
 import 'core/constants/app_constants.dart';
@@ -31,9 +32,19 @@ void main() async {
   final audioService = AdhanAudioService();
   await audioService.initialize();
 
+  // Clear any stale playing flag from previous session
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setBool('adhan_is_playing', false);
+
+  // Initialize AlarmManager for prayer time alarms
   final backgroundService = BackgroundService();
   await backgroundService.initialize();
-  // Background service will be started from settings by user
+
+  // Reschedule alarms if they were previously active (e.g., after app restart)
+  final isAlarmsActive = await backgroundService.isRunning();
+  if (isAlarmsActive) {
+    await backgroundService.scheduleAllPrayerAlarms();
+  }
 
   // Set preferred orientations
   await SystemChrome.setPreferredOrientations([

@@ -60,6 +60,9 @@ class AppConstants {
   static const String backgroundServiceNotificationTitle = 'KeSholat';
   static const String backgroundServiceNotificationContent = 'Prayer times monitoring active';
 
+  // Notification IDs
+  static const int adhanNotificationId = 999;
+
   // Adhan Audio File
   static const String adhanFile = 'adzan.mp3';
 

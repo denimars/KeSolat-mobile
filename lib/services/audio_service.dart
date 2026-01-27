@@ -27,10 +27,14 @@ class AdhanAudioService {
       debugPrint('AdhanAudioService: Player state changed - playing: $_isPlaying');
     });
 
-    _audioPlayer!.processingStateStream.listen((state) {
+    _audioPlayer!.processingStateStream.listen((state) async {
       debugPrint('AdhanAudioService: Processing state: $state');
       if (state == ProcessingState.completed) {
         _isPlaying = false;
+        // Clear the cross-isolate playing flag
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('adhan_is_playing', false);
+        debugPrint('AdhanAudioService: Playback completed, cleared playing flag');
       }
     });
 
@@ -55,6 +59,20 @@ class AdhanAudioService {
     try {
       _lastError = null;
 
+      // Check if already playing (local state)
+      if (_isPlaying) {
+        debugPrint('AdhanAudioService: Already playing (local state), skipping');
+        return true;
+      }
+
+      // Check if already playing (cross-isolate check)
+      final prefs = await SharedPreferences.getInstance();
+      final isGloballyPlaying = prefs.getBool('adhan_is_playing') ?? false;
+      if (isGloballyPlaying) {
+        debugPrint('AdhanAudioService: Already playing (global state), skipping');
+        return true;
+      }
+
       // Ensure initialized
       if (!_isInitialized || _audioPlayer == null) {
         debugPrint('AdhanAudioService: Not initialized, initializing now...');
@@ -76,7 +94,6 @@ class AdhanAudioService {
         return false;
       }
 
-      final prefs = await SharedPreferences.getInstance();
       final volume = prefs.getDouble(AppConstants.keyAdhanVolume) ?? 1.0;
 
       debugPrint('AdhanAudioService: Setting volume to $volume');
@@ -105,6 +122,9 @@ class AdhanAudioService {
       await _audioPlayer!.stop();
     }
     _isPlaying = false;
+    // Clear global playing flag
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('adhan_is_playing', false);
     debugPrint('AdhanAudioService: Stopped');
   }
 
