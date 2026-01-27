@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -8,90 +9,121 @@ class AdhanAudioService {
   factory AdhanAudioService() => _instance;
   AdhanAudioService._internal();
 
-  final AudioPlayer _audioPlayer = AudioPlayer();
+  AudioPlayer? _audioPlayer;
   bool _isPlaying = false;
   String? _lastError;
+  bool _isInitialized = false;
 
   bool get isPlaying => _isPlaying;
   String? get lastError => _lastError;
 
   Future<void> initialize() async {
-    _audioPlayer.playerStateStream.listen((state) {
+    if (_isInitialized) return;
+
+    _audioPlayer = AudioPlayer();
+
+    _audioPlayer!.playerStateStream.listen((state) {
       _isPlaying = state.playing;
+      debugPrint('AdhanAudioService: Player state changed - playing: $_isPlaying');
     });
 
-    _audioPlayer.processingStateStream.listen((state) {
+    _audioPlayer!.processingStateStream.listen((state) {
+      debugPrint('AdhanAudioService: Processing state: $state');
       if (state == ProcessingState.completed) {
         _isPlaying = false;
       }
     });
+
+    _isInitialized = true;
+    debugPrint('AdhanAudioService: Initialized');
   }
 
-  Future<bool> isAdhanFileAvailable(String filename) async {
+  Future<bool> isAdhanFileAvailable() async {
     try {
-      await rootBundle.load('assets/audio/$filename');
+      final assetPath = 'assets/audio/${AppConstants.adhanFile}';
+      debugPrint('AdhanAudioService: Checking file availability: $assetPath');
+      await rootBundle.load(assetPath);
+      debugPrint('AdhanAudioService: File is available');
       return true;
     } catch (e) {
+      debugPrint('AdhanAudioService: File not available - $e');
       return false;
     }
-  }
-
-  Future<List<String>> getAvailableAdhanFiles() async {
-    final available = <String>[];
-    for (final file in AppConstants.adhanOptions) {
-      if (await isAdhanFileAvailable(file)) {
-        available.add(file);
-      }
-    }
-    return available;
   }
 
   Future<bool> playAdhan({String? adhanFile}) async {
     try {
       _lastError = null;
-      final prefs = await SharedPreferences.getInstance();
-      final selectedAdhan = adhanFile ??
-          prefs.getString(AppConstants.keySelectedAdhan) ??
-          AppConstants.adhanOptions.first;
+
+      // Ensure initialized
+      if (!_isInitialized || _audioPlayer == null) {
+        debugPrint('AdhanAudioService: Not initialized, initializing now...');
+        await initialize();
+      }
+
+      final filename = adhanFile ?? AppConstants.adhanFile;
+      final assetPath = 'assets/audio/$filename';
+
+      debugPrint('AdhanAudioService: Attempting to play: $assetPath');
 
       // Check if file exists
-      final isAvailable = await isAdhanFileAvailable(selectedAdhan);
+      final isAvailable = await isAdhanFileAvailable();
       if (!isAvailable) {
-        _lastError = 'File audio adzan tidak ditemukan: $selectedAdhan\n'
+        _lastError = 'File audio adzan tidak ditemukan: $filename\n'
             'Silakan tambahkan file audio ke folder assets/audio/';
         _isPlaying = false;
+        debugPrint('AdhanAudioService: $_lastError');
         return false;
       }
 
+      final prefs = await SharedPreferences.getInstance();
       final volume = prefs.getDouble(AppConstants.keyAdhanVolume) ?? 1.0;
 
-      await _audioPlayer.setVolume(volume);
-      await _audioPlayer.setAsset('assets/audio/$selectedAdhan');
-      await _audioPlayer.play();
+      debugPrint('AdhanAudioService: Setting volume to $volume');
+      await _audioPlayer!.setVolume(volume);
+
+      debugPrint('AdhanAudioService: Loading asset...');
+      await _audioPlayer!.setAsset(assetPath);
+
+      debugPrint('AdhanAudioService: Playing...');
+      await _audioPlayer!.play();
+
       _isPlaying = true;
+      debugPrint('AdhanAudioService: Play started successfully');
       return true;
-    } catch (e) {
+    } catch (e, stackTrace) {
       _lastError = 'Gagal memutar adzan: $e';
       _isPlaying = false;
+      debugPrint('AdhanAudioService: Error - $_lastError');
+      debugPrint('AdhanAudioService: Stack trace - $stackTrace');
       return false;
     }
   }
 
   Future<void> stopAdhan() async {
-    await _audioPlayer.stop();
+    if (_audioPlayer != null) {
+      await _audioPlayer!.stop();
+    }
     _isPlaying = false;
+    debugPrint('AdhanAudioService: Stopped');
   }
 
   Future<void> pauseAdhan() async {
-    await _audioPlayer.pause();
+    if (_audioPlayer != null) {
+      await _audioPlayer!.pause();
+    }
   }
 
   Future<void> resumeAdhan() async {
-    await _audioPlayer.play();
+    if (_audioPlayer != null) {
+      await _audioPlayer!.play();
+    }
   }
 
   Future<void> setVolume(double volume) async {
-    await _audioPlayer.setVolume(volume.clamp(0.0, 1.0));
+    if (_audioPlayer != null) {
+      await _audioPlayer!.setVolume(volume.clamp(0.0, 1.0));
+    }
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble(AppConstants.keyAdhanVolume, volume);
   }
@@ -101,22 +133,13 @@ class AdhanAudioService {
     return prefs.getDouble(AppConstants.keyAdhanVolume) ?? 1.0;
   }
 
-  Future<void> setSelectedAdhan(String adhanFile) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(AppConstants.keySelectedAdhan, adhanFile);
-  }
-
-  Future<String> getSelectedAdhan() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(AppConstants.keySelectedAdhan) ??
-        AppConstants.adhanOptions.first;
-  }
-
-  Stream<Duration> get positionStream => _audioPlayer.positionStream;
-  Stream<Duration?> get durationStream => _audioPlayer.durationStream;
-  Stream<PlayerState> get playerStateStream => _audioPlayer.playerStateStream;
+  Stream<Duration>? get positionStream => _audioPlayer?.positionStream;
+  Stream<Duration?>? get durationStream => _audioPlayer?.durationStream;
+  Stream<PlayerState>? get playerStateStream => _audioPlayer?.playerStateStream;
 
   void dispose() {
-    _audioPlayer.dispose();
+    _audioPlayer?.dispose();
+    _audioPlayer = null;
+    _isInitialized = false;
   }
 }

@@ -11,11 +11,10 @@ class SettingsProvider extends ChangeNotifier {
   bool _adhanEnabled = true;
   bool _notificationEnabled = true;
   double _adhanVolume = 1.0;
-  String _selectedAdhan = AppConstants.adhanOptions.first;
   int _calculationMethod = AppConstants.defaultCalculationMethod;
   bool _isBackgroundServiceRunning = false;
   String? _audioError;
-  List<String> _availableAdhanFiles = [];
+  bool _isAdhanAvailable = false;
 
   SettingsProvider({
     AdhanAudioService? audioService,
@@ -26,24 +25,25 @@ class SettingsProvider extends ChangeNotifier {
   bool get adhanEnabled => _adhanEnabled;
   bool get notificationEnabled => _notificationEnabled;
   double get adhanVolume => _adhanVolume;
-  String get selectedAdhan => _selectedAdhan;
   int get calculationMethod => _calculationMethod;
   bool get isBackgroundServiceRunning => _isBackgroundServiceRunning;
   String? get audioError => _audioError;
-  List<String> get availableAdhanFiles => _availableAdhanFiles;
   bool get isPlaying => _audioService.isPlaying;
+  bool get isAdhanAvailable => _isAdhanAvailable;
 
   Future<void> initialize() async {
+    // Initialize audio service first
+    await _audioService.initialize();
+
     final prefs = await SharedPreferences.getInstance();
 
     _adhanEnabled = prefs.getBool(AppConstants.keyAdhanEnabled) ?? true;
     _notificationEnabled = prefs.getBool(AppConstants.keyNotificationEnabled) ?? true;
     _adhanVolume = prefs.getDouble(AppConstants.keyAdhanVolume) ?? 1.0;
-    _selectedAdhan = prefs.getString(AppConstants.keySelectedAdhan) ?? AppConstants.adhanOptions.first;
     _calculationMethod = prefs.getInt(AppConstants.keyCalculationMethod) ?? AppConstants.defaultCalculationMethod;
 
     _isBackgroundServiceRunning = await _backgroundService.isRunning();
-    _availableAdhanFiles = await _audioService.getAvailableAdhanFiles();
+    _isAdhanAvailable = await _audioService.isAdhanFileAvailable();
 
     notifyListeners();
   }
@@ -68,12 +68,6 @@ class SettingsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setSelectedAdhan(String adhan) async {
-    _selectedAdhan = adhan;
-    await _audioService.setSelectedAdhan(adhan);
-    notifyListeners();
-  }
-
   Future<void> setCalculationMethod(int method) async {
     _calculationMethod = method;
     final prefs = await SharedPreferences.getInstance();
@@ -83,7 +77,7 @@ class SettingsProvider extends ChangeNotifier {
 
   Future<bool> playAdhanPreview() async {
     _audioError = null;
-    final success = await _audioService.playAdhan(adhanFile: _selectedAdhan);
+    final success = await _audioService.playAdhan();
     if (!success) {
       _audioError = _audioService.lastError;
     }
@@ -98,11 +92,6 @@ class SettingsProvider extends ChangeNotifier {
 
   void clearAudioError() {
     _audioError = null;
-    notifyListeners();
-  }
-
-  Future<void> refreshAvailableAdhanFiles() async {
-    _availableAdhanFiles = await _audioService.getAvailableAdhanFiles();
     notifyListeners();
   }
 

@@ -64,24 +64,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const Divider(height: 1),
                   ListTile(
-                    leading: const Icon(Icons.music_note, color: AppColors.primary),
-                    title: const Text('Pilih Suara Adzan'),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _getAdhanDisplayName(settings.selectedAdhan),
-                          style: const TextStyle(color: AppColors.textSecondary),
-                        ),
-                        if (settings.availableAdhanFiles.isEmpty)
-                          const Text(
-                            'Belum ada file audio',
-                            style: TextStyle(color: AppColors.warning, fontSize: 12),
-                          ),
-                      ],
+                    leading: const Icon(Icons.play_circle, color: AppColors.primary),
+                    title: const Text('Test Adzan'),
+                    subtitle: Text(
+                      settings.isAdhanAvailable
+                          ? 'Ketuk untuk memutar preview adzan'
+                          : 'File adzan.mp3 belum tersedia',
+                      style: TextStyle(
+                        color: settings.isAdhanAvailable
+                            ? AppColors.textSecondary
+                            : AppColors.warning,
+                      ),
                     ),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => _showAdhanPicker(context, settings),
+                    trailing: IconButton(
+                      icon: Icon(
+                        settings.isPlaying ? Icons.stop : Icons.play_arrow,
+                        color: settings.isAdhanAvailable
+                            ? AppColors.primary
+                            : AppColors.disabledButton,
+                      ),
+                      onPressed: settings.isAdhanAvailable
+                          ? () async {
+                              if (settings.isPlaying) {
+                                await settings.stopAdhanPreview();
+                              } else {
+                                final success = await settings.playAdhanPreview();
+                                if (!success && context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                          settings.audioError ?? 'Gagal memutar audio'),
+                                      backgroundColor: AppColors.error,
+                                    ),
+                                  );
+                                }
+                              }
+                            }
+                          : null,
+                    ),
                   ),
                   const Divider(height: 1),
                   ListTile(
@@ -234,154 +254,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: children,
       ),
     );
-  }
-
-  String _getAdhanDisplayName(String filename) {
-    switch (filename) {
-      case 'adhan_makkah.mp3':
-        return 'Adzan Makkah';
-      case 'adhan_madinah.mp3':
-        return 'Adzan Madinah';
-      case 'adhan_mishary.mp3':
-        return 'Mishary Rashid Alafasy';
-      default:
-        return filename;
-    }
-  }
-
-  void _showAdhanPicker(BuildContext context, SettingsProvider settings) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (sheetContext) {
-        return ChangeNotifierProvider.value(
-          value: settings,
-          child: Consumer<SettingsProvider>(
-            builder: (context, settings, _) {
-              return SafeArea(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Pilih Suara Adzan',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          if (settings.isPlaying)
-                            TextButton.icon(
-                              onPressed: () => settings.stopAdhanPreview(),
-                              icon: const Icon(Icons.stop, color: AppColors.error),
-                              label: const Text('Stop', style: TextStyle(color: AppColors.error)),
-                            ),
-                        ],
-                      ),
-                    ),
-                    if (settings.availableAdhanFiles.isEmpty)
-                      Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 16),
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppColors.warning.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
-                        ),
-                        child: const Column(
-                          children: [
-                            Icon(Icons.music_off, color: AppColors.warning, size: 40),
-                            SizedBox(height: 8),
-                            Text(
-                              'File audio belum tersedia',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            SizedBox(height: 4),
-                            Text(
-                              'Tambahkan file audio adzan ke folder:\nassets/audio/',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                            ),
-                          ],
-                        ),
-                      ),
-                    const SizedBox(height: 8),
-                    ...AppConstants.adhanOptions.map((adhan) {
-                      final isSelected = settings.selectedAdhan == adhan;
-                      final isAvailable = settings.availableAdhanFiles.contains(adhan);
-                      return ListTile(
-                        leading: Icon(
-                          isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-                          color: isSelected ? AppColors.primary : AppColors.textSecondary,
-                        ),
-                        title: Row(
-                          children: [
-                            Text(_getAdhanDisplayName(adhan)),
-                            if (!isAvailable) ...[
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: AppColors.warning.withValues(alpha: 0.2),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: const Text(
-                                  'Tidak ada',
-                                  style: TextStyle(fontSize: 10, color: AppColors.warning),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                        trailing: IconButton(
-                          icon: Icon(
-                            settings.isPlaying && settings.selectedAdhan == adhan
-                                ? Icons.stop
-                                : Icons.play_arrow,
-                            color: isAvailable ? AppColors.primary : AppColors.disabledButton,
-                          ),
-                          onPressed: isAvailable
-                              ? () async {
-                                  if (settings.isPlaying && settings.selectedAdhan == adhan) {
-                                    await settings.stopAdhanPreview();
-                                  } else {
-                                    await settings.setSelectedAdhan(adhan);
-                                    final success = await settings.playAdhanPreview();
-                                    if (!success && context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text(settings.audioError ?? 'Gagal memutar audio'),
-                                          backgroundColor: AppColors.error,
-                                        ),
-                                      );
-                                    }
-                                  }
-                                }
-                              : null,
-                        ),
-                        onTap: () {
-                          settings.setSelectedAdhan(adhan);
-                          Navigator.pop(context);
-                        },
-                      );
-                    }),
-                    const SizedBox(height: 16),
-                  ],
-                ),
-              );
-            },
-          ),
-        );
-      },
-    ).whenComplete(() {
-      settings.stopAdhanPreview();
-    });
   }
 
   void _showCalculationMethodPicker(

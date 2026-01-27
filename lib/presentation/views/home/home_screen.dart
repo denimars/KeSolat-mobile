@@ -7,8 +7,6 @@ import '../../../domain/entities/daily_prayer_schedule.dart';
 import '../../providers/prayer_provider.dart';
 import '../../widgets/countdown_widget.dart';
 import '../../widgets/prayer_card.dart';
-import '../qibla/qibla_screen.dart';
-import '../settings/settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -32,18 +30,6 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('KeSholat'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.explore),
-            onPressed: () => _navigateToQibla(context),
-            tooltip: 'Kompas Kiblat',
-          ),
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: () => _navigateToSettings(context),
-            tooltip: 'Pengaturan',
-          ),
-        ],
       ),
       body: Consumer<PrayerProvider>(
         builder: (context, provider, _) {
@@ -258,19 +244,5 @@ class _HomeScreenState extends State<HomeScreen> {
       return PrayerStatus.passed;
     }
     return PrayerStatus.upcoming;
-  }
-
-  void _navigateToQibla(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const QiblaScreen()),
-    );
-  }
-
-  void _navigateToSettings(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const SettingsScreen()),
-    );
   }
 }

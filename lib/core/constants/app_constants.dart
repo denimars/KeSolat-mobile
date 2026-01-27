@@ -53,7 +53,6 @@ class AppConstants {
   static const String keyAdhanVolume = 'adhan_volume';
   static const String keyAdhanEnabled = 'adhan_enabled';
   static const String keyNotificationEnabled = 'notification_enabled';
-  static const String keySelectedAdhan = 'selected_adhan';
   static const String keyFirstLaunch = 'first_launch';
 
   // Background Service
@@ -61,12 +60,8 @@ class AppConstants {
   static const String backgroundServiceNotificationTitle = 'KeSholat';
   static const String backgroundServiceNotificationContent = 'Prayer times monitoring active';
 
-  // Adhan Audio Files
-  static const List<String> adhanOptions = [
-    'adhan_makkah.mp3',
-    'adhan_madinah.mp3',
-    'adhan_mishary.mp3',
-  ];
+  // Adhan Audio File
+  static const String adhanFile = 'adzan.mp3';
 
   // Prayer Calculation Methods
   static const Map<int, String> calculationMethods = {

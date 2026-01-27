@@ -19,16 +19,16 @@ class BackgroundService {
     await _service.configure(
       androidConfiguration: AndroidConfiguration(
         onStart: onStart,
-        autoStart: true,
+        autoStart: false, // Don't auto-start, let user control it
         isForegroundMode: true,
         notificationChannelId: AppConstants.backgroundServiceChannelId,
         initialNotificationTitle: AppConstants.backgroundServiceNotificationTitle,
         initialNotificationContent: AppConstants.backgroundServiceNotificationContent,
         foregroundServiceNotificationId: 888,
-        autoStartOnBoot: true,
+        foregroundServiceTypes: [AndroidForegroundType.dataSync],
       ),
       iosConfiguration: IosConfiguration(
-        autoStart: true,
+        autoStart: false,
         onForeground: onStart,
         onBackground: onIosBackground,
       ),
@@ -62,6 +62,16 @@ Future<bool> onIosBackground(ServiceInstance service) async {
 void onStart(ServiceInstance service) async {
   DartPluginRegistrant.ensureInitialized();
 
+  // CRITICAL: Set foreground notification IMMEDIATELY for Android 12+
+  if (service is AndroidServiceInstance) {
+    service.setAsForegroundService();
+    service.setForegroundNotificationInfo(
+      title: AppConstants.backgroundServiceNotificationTitle,
+      content: AppConstants.backgroundServiceNotificationContent,
+    );
+  }
+
+  // Now initialize other services
   final notificationService = NotificationService();
   await notificationService.initialize();
 
@@ -82,6 +92,9 @@ void onStart(ServiceInstance service) async {
     service.stopSelf();
   });
 
+  // Initial check
+  await _checkPrayerTime(notificationService, audioService);
+
   Timer.periodic(
     const Duration(seconds: AppConstants.prayerCheckIntervalSeconds),
     (timer) async {
@@ -91,7 +104,7 @@ void onStart(ServiceInstance service) async {
         if (await service.isForegroundService()) {
           service.setForegroundNotificationInfo(
             title: AppConstants.backgroundServiceNotificationTitle,
-            content: 'Last check: ${DateTime.now().toString().substring(11, 19)}',
+            content: 'Pemeriksaan terakhir: ${DateTime.now().toString().substring(11, 19)}',
           );
         }
       }

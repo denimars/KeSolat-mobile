@@ -12,7 +12,7 @@ import 'services/audio_service.dart';
 import 'presentation/providers/prayer_provider.dart';
 import 'presentation/providers/settings_provider.dart';
 import 'presentation/providers/qibla_provider.dart';
-import 'presentation/views/home/home_screen.dart';
+import 'presentation/views/main/main_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,7 +33,7 @@ void main() async {
 
   final backgroundService = BackgroundService();
   await backgroundService.initialize();
-  await backgroundService.startService();
+  // Background service will be started from settings by user
 
   // Set preferred orientations
   await SystemChrome.setPreferredOrientations([
@@ -68,7 +68,7 @@ class KeSholatApp extends StatelessWidget {
         title: AppConstants.appName,
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
-        home: const HomeScreen(),
+        home: const MainScreen(),
       ),
     );
   }
