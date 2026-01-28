@@ -6,11 +6,13 @@ import '../../domain/entities/location.dart';
 import '../../domain/entities/prayer_time.dart';
 import '../../data/repositories/prayer_repository.dart';
 import '../../services/location_service.dart';
+import '../../services/background_service.dart';
 import '../../core/constants/app_constants.dart';
 
 class PrayerProvider extends ChangeNotifier {
   final PrayerRepository _prayerRepository;
   final LocationService _locationService;
+  final BackgroundService _backgroundService;
 
   DailyPrayerSchedule? _todaySchedule;
   Location? _currentLocation;
@@ -24,8 +26,10 @@ class PrayerProvider extends ChangeNotifier {
   PrayerProvider({
     PrayerRepository? prayerRepository,
     LocationService? locationService,
+    BackgroundService? backgroundService,
   })  : _prayerRepository = prayerRepository ?? PrayerRepository(),
-        _locationService = locationService ?? LocationService();
+        _locationService = locationService ?? LocationService(),
+        _backgroundService = backgroundService ?? BackgroundService();
 
   DailyPrayerSchedule? get todaySchedule => _todaySchedule;
   Location? get currentLocation => _currentLocation;
@@ -78,6 +82,26 @@ class PrayerProvider extends ChangeNotifier {
     }
     if (location.country != null) {
       await prefs.setString(AppConstants.keyCountry, location.country!);
+    }
+
+    // Schedule prayer alarms after location is saved
+    await _scheduleAlarmsAfterLocationSet();
+  }
+
+  /// Schedule prayer alarms automatically when location is set
+  Future<void> _scheduleAlarmsAfterLocationSet() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final adhanEnabled = prefs.getBool(AppConstants.keyAdhanEnabled) ?? true;
+
+      if (adhanEnabled) {
+        debugPrint('PrayerProvider: Location set, scheduling prayer alarms...');
+        await _backgroundService.initialize();
+        await _backgroundService.scheduleAllPrayerAlarms();
+        debugPrint('PrayerProvider: Prayer alarms scheduled successfully');
+      }
+    } catch (e) {
+      debugPrint('PrayerProvider: Error scheduling alarms: $e');
     }
   }
 

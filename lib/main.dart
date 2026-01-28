@@ -40,9 +40,13 @@ void main() async {
   final backgroundService = BackgroundService();
   await backgroundService.initialize();
 
-  // Reschedule alarms if they were previously active (e.g., after app restart)
-  final isAlarmsActive = await backgroundService.isRunning();
-  if (isAlarmsActive) {
+  // Schedule alarms if location exists and adhan is enabled
+  final hasLocation = prefs.getDouble(AppConstants.keyLatitude) != null &&
+      prefs.getDouble(AppConstants.keyLongitude) != null;
+  final adhanEnabled = prefs.getBool(AppConstants.keyAdhanEnabled) ?? true;
+
+  if (hasLocation && adhanEnabled) {
+    debugPrint('main: Location exists and adhan enabled, scheduling alarms...');
     await backgroundService.scheduleAllPrayerAlarms();
   }
 
