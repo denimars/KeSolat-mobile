@@ -51,11 +51,11 @@ void main() async {
 
   // ============ TEST ALARM ============
   // Uncomment untuk test alarm. Ganti hour & minute sesuai kebutuhan.
-  await backgroundService.scheduleTestAlarm(
-    hour: 14,
-    minute: 13,
-    prayerName: 'Test Adzan',
-  );
+  // await backgroundService.scheduleTestAlarm(
+  //   hour: 14,
+  //   minute: 13,
+  //   prayerName: 'Test Adzan',
+  // );
   // ====================================
 
   // Set preferred orientations
