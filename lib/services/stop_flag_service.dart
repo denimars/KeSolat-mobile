@@ -7,14 +7,40 @@ class StopFlagService {
   static const String _stopFileName = 'kesholat_stop.flag';
   static const String _playingFileName = 'kesholat_playing.flag';
 
-  /// Get a path that is GUARANTEED to be the same in all isolates
-  /// Using /data/local/tmp which is accessible to all processes
+  /// Get the app's private data directory path
+  /// This is accessible from both main isolate and background isolates
   static String _getBasePath() {
-    // Use /data/local/tmp which is world-readable/writable on Android
     if (Platform.isAndroid) {
-      return '/data/local/tmp';
+      // Try multiple possible paths for compatibility across devices
+      // Most devices use /data/user/0, but some use /data/data
+      final paths = [
+        '/data/user/0/com.kesholat.app/files',
+        '/data/data/com.kesholat.app/files',
+      ];
+
+      for (final path in paths) {
+        final dir = Directory(path);
+        if (dir.existsSync()) {
+          return path;
+        }
+      }
+
+      // Default to most common path
+      return '/data/user/0/com.kesholat.app/files';
     }
     return Directory.systemTemp.path;
+  }
+
+  /// Ensure base directory exists
+  static Future<void> _ensureDirectoryExists() async {
+    final dir = Directory(_getBasePath());
+    if (!await dir.exists()) {
+      try {
+        await dir.create(recursive: true);
+      } catch (e) {
+        debugPrint('StopFlagService: Error creating directory: $e');
+      }
+    }
   }
 
   static String _getStopFlagPath() {
@@ -27,6 +53,7 @@ class StopFlagService {
 
   /// Set stop requested flag
   static Future<void> setStopRequested(bool value) async {
+    await _ensureDirectoryExists();
     final path = _getStopFlagPath();
     debugPrint('StopFlagService: setStopRequested($value) at $path');
     try {
@@ -74,6 +101,7 @@ class StopFlagService {
 
   /// Set playing flag
   static Future<void> setPlaying(bool value) async {
+    await _ensureDirectoryExists();
     final path = _getPlayingFlagPath();
     try {
       final file = File(path);

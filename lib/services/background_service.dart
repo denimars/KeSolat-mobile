@@ -270,9 +270,18 @@ Future<void> _onPrayerAlarmCallback(int alarmId) async {
   // IMMEDIATELY mark as played and playing to prevent duplicate triggers
   await prefs.setBool(lastPlayedKey, true);
   await prefs.setBool('adhan_is_playing', true);
+
+  // Set file-based flag for cross-isolate communication
   await StopFlagService.setPlaying(true);
   await StopFlagService.setStopRequested(false);
-  debugPrint('BackgroundService: *** adhan_is_playing set to TRUE ***');
+
+  // Small delay to ensure data is persisted before main isolate checks
+  await Future.delayed(const Duration(milliseconds: 100));
+
+  // Verify flags are set
+  final verifyPrefs = prefs.getBool('adhan_is_playing');
+  final verifyFile = await StopFlagService.isPlaying();
+  debugPrint('BackgroundService: *** FLAGS SET - prefs=$verifyPrefs, file=$verifyFile ***');
 
   try {
     // Initialize and show notification first

@@ -52,12 +52,12 @@ void main() async {
 
   // ============ TEST ALARM ============
  
-  // await backgroundService.scheduleTestAlarm(
-  //   hour: 9,
-  //   minute: 1,
-  //   prayerName: 'Subuh',
-  // );
-  // ====================================
+  await backgroundService.scheduleTestAlarm(
+    hour: 13,
+    minute: 20,
+    prayerName: 'Subuh',
+  );
+  // ==================================== 
 
   // Set preferred orientations
   await SystemChrome.setPreferredOrientations([

@@ -48,20 +48,32 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _checkAdhanStatus() async {
-    // Check BOTH file-based flag AND SharedPreferences
-    final fileIsPlaying = await StopFlagService.isPlaying();
+    try {
+      // Check file-based flag
+      final fileIsPlaying = await StopFlagService.isPlaying();
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.reload();
-    final prefsIsPlaying = prefs.getBool('adhan_is_playing') ?? false;
+      // Check SharedPreferences with fresh data
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
+      final prefsIsPlaying = prefs.getBool('adhan_is_playing') ?? false;
 
-    final isPlaying = fileIsPlaying || prefsIsPlaying;
+      final isPlaying = fileIsPlaying || prefsIsPlaying;
 
-    if (isPlaying != _isAdhanPlaying) {
-      debugPrint('HomeScreen: Adhan status changed - file=$fileIsPlaying, prefs=$prefsIsPlaying, result=$isPlaying');
-      setState(() {
-        _isAdhanPlaying = isPlaying;
-      });
+      // Log every 5 seconds for debugging
+      if (DateTime.now().second % 5 == 0) {
+        debugPrint('HomeScreen: Status check - file=$fileIsPlaying, prefs=$prefsIsPlaying, current=$_isAdhanPlaying');
+      }
+
+      if (isPlaying != _isAdhanPlaying) {
+        debugPrint('HomeScreen: *** ADHAN STATUS CHANGED *** file=$fileIsPlaying, prefs=$prefsIsPlaying, new=$isPlaying');
+        if (mounted) {
+          setState(() {
+            _isAdhanPlaying = isPlaying;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('HomeScreen: Error checking adhan status: $e');
     }
   }
 
