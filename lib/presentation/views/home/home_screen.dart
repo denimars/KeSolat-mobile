@@ -7,6 +7,7 @@ import '../../../core/utils/date_utils.dart';
 import '../../../domain/entities/prayer_time.dart';
 import '../../../domain/entities/daily_prayer_schedule.dart';
 import '../../../services/notification_service.dart';
+import '../../../services/stop_flag_service.dart';
 import '../../providers/prayer_provider.dart';
 import '../../widgets/countdown_widget.dart';
 import '../../widgets/prayer_card.dart';
@@ -47,9 +48,17 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _checkAdhanStatus() async {
+    // Check BOTH file-based flag AND SharedPreferences
+    final fileIsPlaying = await StopFlagService.isPlaying();
+
     final prefs = await SharedPreferences.getInstance();
-    final isPlaying = prefs.getBool('adhan_is_playing') ?? false;
+    await prefs.reload();
+    final prefsIsPlaying = prefs.getBool('adhan_is_playing') ?? false;
+
+    final isPlaying = fileIsPlaying || prefsIsPlaying;
+
     if (isPlaying != _isAdhanPlaying) {
+      debugPrint('HomeScreen: Adhan status changed - file=$fileIsPlaying, prefs=$prefsIsPlaying, result=$isPlaying');
       setState(() {
         _isAdhanPlaying = isPlaying;
       });
@@ -57,11 +66,23 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _stopAdhan() async {
+    debugPrint('HomeScreen: ========= STOP BUTTON PRESSED =========');
+
+    // Get the flag file path for debugging
+    final flagPath = await StopFlagService.getStopFlagFilePath();
+    debugPrint('HomeScreen: Stop flag will be created at: $flagPath');
+
     final notificationService = NotificationService();
     await notificationService.stopAdhanAndCancelNotification();
+
+    // Verify the flag was created
+    final isStopSet = await StopFlagService.isStopRequested();
+    debugPrint('HomeScreen: Stop flag is set: $isStopSet');
+
     setState(() {
       _isAdhanPlaying = false;
     });
+    debugPrint('HomeScreen: =====================================');
   }
 
   @override
@@ -336,7 +357,10 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 12),
 
-            ...schedule.mainPrayers.map((prayer) {
+            // Filter prayers: hide if passed more than 1 hour
+            ...schedule.mainPrayers
+                .where((prayer) => !_shouldHidePrayer(prayer, now))
+                .map((prayer) {
               final status = _getPrayerStatus(prayer, schedule, now);
               return Padding(
                 padding: const EdgeInsets.only(bottom: 8),
@@ -352,17 +376,31 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// Check if prayer should be hidden (passed more than 1 hour ago)
+  bool _shouldHidePrayer(PrayerTime prayer, DateTime now) {
+    final oneHourAfterPrayer = prayer.time.add(const Duration(hours: 1));
+    return now.isAfter(oneHourAfterPrayer);
+  }
+
   PrayerStatus _getPrayerStatus(PrayerTime prayer, DailyPrayerSchedule schedule, DateTime now) {
     final nextPrayer = schedule.getNextPrayer(now);
-    final currentPrayer = schedule.getCurrentPrayer(now);
+    final oneHourAfterPrayer = prayer.time.add(const Duration(hours: 1));
 
-    if (currentPrayer?.name == prayer.name) {
+    // Active: prayer time has passed but still within 1 hour
+    if (prayer.time.isBefore(now) && now.isBefore(oneHourAfterPrayer)) {
       return PrayerStatus.active;
-    } else if (nextPrayer?.name == prayer.name) {
-      return PrayerStatus.upcoming;
-    } else if (prayer.time.isBefore(now)) {
-      return PrayerStatus.passed;
     }
-    return PrayerStatus.upcoming;
+
+    // Upcoming: next prayer to come
+    if (nextPrayer?.name == prayer.name) {
+      return PrayerStatus.upcoming;
+    }
+
+    // Future prayers
+    if (prayer.time.isAfter(now)) {
+      return PrayerStatus.upcoming;
+    }
+
+    return PrayerStatus.passed;
   }
 }

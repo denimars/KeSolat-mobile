@@ -1,10 +1,11 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/constants/app_constants.dart';
 import '../domain/entities/prayer_time.dart';
-import 'audio_service.dart';
+import 'stop_flag_service.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -33,13 +34,10 @@ class NotificationService {
       iOS: iosSettings,
     );
 
-    await _notifications.initialize(
-      settings,
-      onDidReceiveNotificationResponse: _onNotificationTapped,
-    );
-
+    await _notifications.initialize(settings);
     await _createNotificationChannels();
     _isInitialized = true;
+    debugPrint('NotificationService: Initialized');
   }
 
   Future<void> _createNotificationChannels() async {
@@ -64,7 +62,7 @@ class NotificationService {
           AppConstants.adhanNotificationChannelName,
           description: AppConstants.adhanNotificationChannelDesc,
           importance: Importance.max,
-          playSound: true,
+          playSound: false,
         ),
       );
 
@@ -80,30 +78,24 @@ class NotificationService {
     }
   }
 
-  void _onNotificationTapped(NotificationResponse response) {
-    // Handle notification tap or action
-    if (response.actionId == 'stop_adhan') {
-      _stopAdhan();
-    }
-  }
+  /// Stop adhan and cancel notification - called from app
+  Future<void> stopAdhanAndCancelNotification() async {
+    debugPrint('NotificationService: Stopping adhan...');
 
-  Future<void> _stopAdhan() async {
-    // Stop audio
-    final audioService = AdhanAudioService();
-    await audioService.initialize();
-    await audioService.stopAdhan();
+    // Use FILE-BASED flag for reliable cross-isolate communication
+    await StopFlagService.setStopRequested(true);
+    await StopFlagService.setPlaying(false);
+    debugPrint('NotificationService: File-based stop flag SET');
 
-    // Clear playing flag
+    // Also set SharedPreferences as backup
     final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('adhan_stop_requested', true);
     await prefs.setBool('adhan_is_playing', false);
 
-    // Cancel the ongoing notification
-    await cancelNotification(AppConstants.adhanNotificationId);
-  }
+    // Cancel the notification
+    await _notifications.cancel(AppConstants.adhanNotificationId);
 
-  /// Public method to stop adhan from anywhere in the app
-  Future<void> stopAdhanAndCancelNotification() async {
-    await _stopAdhan();
+    debugPrint('NotificationService: Adhan stop requested, notification cancelled');
   }
 
   Future<bool> requestPermission() async {
@@ -152,27 +144,24 @@ class NotificationService {
     required int id,
     required String prayerName,
   }) async {
+    // Clear any previous stop request
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('adhan_stop_requested', false);
+
     const androidDetails = AndroidNotificationDetails(
       AppConstants.adhanNotificationChannelId,
       AppConstants.adhanNotificationChannelName,
       channelDescription: AppConstants.adhanNotificationChannelDesc,
       importance: Importance.max,
       priority: Priority.max,
-      fullScreenIntent: true,
+      fullScreenIntent: false,
       icon: '@mipmap/ic_launcher',
       category: AndroidNotificationCategory.alarm,
       visibility: NotificationVisibility.public,
       autoCancel: false,
       ongoing: true,
-      actions: <AndroidNotificationAction>[
-        AndroidNotificationAction(
-          'stop_adhan',
-          'Stop Adzan',
-          icon: DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
-          showsUserInterface: true,
-          cancelNotification: true,
-        ),
-      ],
+      playSound: false,
+      // No action buttons - stop is handled in app
     );
 
     const iosDetails = DarwinNotificationDetails(
@@ -187,14 +176,15 @@ class NotificationService {
       iOS: iosDetails,
     );
 
-    // Use constant ID for adhan notification so we can cancel it
     await _notifications.show(
       AppConstants.adhanNotificationId,
       'Waktu $prayerName',
-      'Saatnya menunaikan sholat $prayerName',
+      'Adzan sedang berkumandang. Buka app untuk menghentikan.',
       details,
       payload: 'adhan_$prayerName',
     );
+
+    debugPrint('NotificationService: Adhan notification shown for $prayerName');
   }
 
   Future<void> schedulePrayerNotification({

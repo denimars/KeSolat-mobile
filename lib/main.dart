@@ -46,6 +46,15 @@ void main() async {
     await backgroundService.scheduleAllPrayerAlarms();
   }
 
+  // ============ TEST ALARM ============
+ 
+  // await backgroundService.scheduleTestAlarm(
+  //   hour: 9,
+  //   minute: 1,
+  //   prayerName: 'Subuh',
+  // );
+  // ====================================
+
   // Set preferred orientations
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,

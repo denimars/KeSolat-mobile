@@ -1,15 +1,85 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:audio_service/audio_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/constants/app_constants.dart';
+
+/// Audio handler for background audio playback
+class AdhanAudioHandler extends BaseAudioHandler with SeekHandler {
+  final AudioPlayer _player = AudioPlayer();
+
+  AdhanAudioHandler() {
+    _player.playbackEventStream.listen(_broadcastState);
+    _player.processingStateStream.listen((state) async {
+      if (state == ProcessingState.completed) {
+        await stop();
+        // Clear the cross-isolate playing flag
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('adhan_is_playing', false);
+      }
+    });
+  }
+
+  void _broadcastState(PlaybackEvent event) {
+    playbackState.add(playbackState.value.copyWith(
+      controls: [
+        MediaControl.pause,
+        MediaControl.stop,
+      ],
+      systemActions: const {
+        MediaAction.seek,
+        MediaAction.pause,
+        MediaAction.stop,
+      },
+      processingState: const {
+        ProcessingState.idle: AudioProcessingState.idle,
+        ProcessingState.loading: AudioProcessingState.loading,
+        ProcessingState.buffering: AudioProcessingState.buffering,
+        ProcessingState.ready: AudioProcessingState.ready,
+        ProcessingState.completed: AudioProcessingState.completed,
+      }[_player.processingState]!,
+      playing: _player.playing,
+      updatePosition: _player.position,
+      bufferedPosition: _player.bufferedPosition,
+      speed: _player.speed,
+    ));
+  }
+
+  Future<void> playFromAsset(String assetPath) async {
+    try {
+      await _player.setAsset(assetPath);
+      await play();
+    } catch (e) {
+      debugPrint('AdhanAudioHandler: Error playing from asset: $e');
+    }
+  }
+
+  @override
+  Future<void> play() => _player.play();
+
+  @override
+  Future<void> pause() => _player.pause();
+
+  @override
+  Future<void> stop() async {
+    await _player.stop();
+    await super.stop();
+  }
+
+  @override
+  Future<void> seek(Duration position) => _player.seek(position);
+
+  Future<void> setVolume(double volume) => _player.setVolume(volume);
+}
 
 class AdhanAudioService {
   static final AdhanAudioService _instance = AdhanAudioService._internal();
   factory AdhanAudioService() => _instance;
   AdhanAudioService._internal();
 
-  AudioPlayer? _audioPlayer;
+  static AdhanAudioHandler? _audioHandler;
+  AudioPlayer? _fallbackPlayer;
   bool _isPlaying = false;
   String? _lastError;
   bool _isInitialized = false;
@@ -17,26 +87,35 @@ class AdhanAudioService {
   bool get isPlaying => _isPlaying;
   String? get lastError => _lastError;
 
+  static AdhanAudioHandler? get audioHandler => _audioHandler;
+
   Future<void> initialize() async {
     if (_isInitialized) return;
 
-    _audioPlayer = AudioPlayer();
-
-    _audioPlayer!.playerStateStream.listen((state) {
-      _isPlaying = state.playing;
-      debugPrint('AdhanAudioService: Player state changed - playing: $_isPlaying');
-    });
-
-    _audioPlayer!.processingStateStream.listen((state) async {
-      debugPrint('AdhanAudioService: Processing state: $state');
-      if (state == ProcessingState.completed) {
-        _isPlaying = false;
-        // Clear the cross-isolate playing flag
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool('adhan_is_playing', false);
-        debugPrint('AdhanAudioService: Playback completed, cleared playing flag');
-      }
-    });
+    try {
+      // Try to initialize audio_service for background playback
+      _audioHandler = await AudioService.init(
+        builder: () => AdhanAudioHandler(),
+        config: const AudioServiceConfig(
+          androidNotificationChannelId: 'com.kesholat.app.adhan',
+          androidNotificationChannelName: 'Adhan Playback',
+          androidNotificationOngoing: true,
+          androidStopForegroundOnPause: true,
+        ),
+      );
+      debugPrint('AdhanAudioService: AudioService initialized');
+    } catch (e) {
+      debugPrint('AdhanAudioService: AudioService init failed, using fallback: $e');
+      // Fallback to direct AudioPlayer for preview/testing
+      _fallbackPlayer = AudioPlayer();
+      _fallbackPlayer!.processingStateStream.listen((state) async {
+        if (state == ProcessingState.completed) {
+          _isPlaying = false;
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setBool('adhan_is_playing', false);
+        }
+      });
+    }
 
     _isInitialized = true;
     debugPrint('AdhanAudioService: Initialized');
@@ -74,7 +153,7 @@ class AdhanAudioService {
       }
 
       // Ensure initialized
-      if (!_isInitialized || _audioPlayer == null) {
+      if (!_isInitialized) {
         debugPrint('AdhanAudioService: Not initialized, initializing now...');
         await initialize();
       }
@@ -96,14 +175,19 @@ class AdhanAudioService {
 
       final volume = prefs.getDouble(AppConstants.keyAdhanVolume) ?? 1.0;
 
-      debugPrint('AdhanAudioService: Setting volume to $volume');
-      await _audioPlayer!.setVolume(volume);
-
-      debugPrint('AdhanAudioService: Loading asset...');
-      await _audioPlayer!.setAsset(assetPath);
-
-      debugPrint('AdhanAudioService: Playing...');
-      await _audioPlayer!.play();
+      // Use audio handler if available (for background playback)
+      if (_audioHandler != null) {
+        debugPrint('AdhanAudioService: Using AudioService for playback');
+        await _audioHandler!.setVolume(volume);
+        await _audioHandler!.playFromAsset(assetPath);
+      } else if (_fallbackPlayer != null) {
+        debugPrint('AdhanAudioService: Using fallback player');
+        await _fallbackPlayer!.setVolume(volume);
+        await _fallbackPlayer!.setAsset(assetPath);
+        await _fallbackPlayer!.play();
+      } else {
+        throw Exception('No audio player available');
+      }
 
       _isPlaying = true;
       debugPrint('AdhanAudioService: Play started successfully');
@@ -118,8 +202,11 @@ class AdhanAudioService {
   }
 
   Future<void> stopAdhan() async {
-    if (_audioPlayer != null) {
-      await _audioPlayer!.stop();
+    if (_audioHandler != null) {
+      await _audioHandler!.stop();
+    }
+    if (_fallbackPlayer != null) {
+      await _fallbackPlayer!.stop();
     }
     _isPlaying = false;
     // Clear global playing flag
@@ -129,23 +216,33 @@ class AdhanAudioService {
   }
 
   Future<void> pauseAdhan() async {
-    if (_audioPlayer != null) {
-      await _audioPlayer!.pause();
+    if (_audioHandler != null) {
+      await _audioHandler!.pause();
+    }
+    if (_fallbackPlayer != null) {
+      await _fallbackPlayer!.pause();
     }
   }
 
   Future<void> resumeAdhan() async {
-    if (_audioPlayer != null) {
-      await _audioPlayer!.play();
+    if (_audioHandler != null) {
+      await _audioHandler!.play();
+    }
+    if (_fallbackPlayer != null) {
+      await _fallbackPlayer!.play();
     }
   }
 
   Future<void> setVolume(double volume) async {
-    if (_audioPlayer != null) {
-      await _audioPlayer!.setVolume(volume.clamp(0.0, 1.0));
+    final clampedVolume = volume.clamp(0.0, 1.0);
+    if (_audioHandler != null) {
+      await _audioHandler!.setVolume(clampedVolume);
+    }
+    if (_fallbackPlayer != null) {
+      await _fallbackPlayer!.setVolume(clampedVolume);
     }
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble(AppConstants.keyAdhanVolume, volume);
+    await prefs.setDouble(AppConstants.keyAdhanVolume, clampedVolume);
   }
 
   Future<double> getVolume() async {
@@ -153,13 +250,9 @@ class AdhanAudioService {
     return prefs.getDouble(AppConstants.keyAdhanVolume) ?? 1.0;
   }
 
-  Stream<Duration>? get positionStream => _audioPlayer?.positionStream;
-  Stream<Duration?>? get durationStream => _audioPlayer?.durationStream;
-  Stream<PlayerState>? get playerStateStream => _audioPlayer?.playerStateStream;
-
   void dispose() {
-    _audioPlayer?.dispose();
-    _audioPlayer = null;
+    _fallbackPlayer?.dispose();
+    _fallbackPlayer = null;
     _isInitialized = false;
   }
 }
