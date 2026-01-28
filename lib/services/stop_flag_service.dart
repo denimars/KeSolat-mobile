@@ -7,26 +7,33 @@ class StopFlagService {
   static const String _stopFileName = 'kesholat_stop.flag';
   static const String _playingFileName = 'kesholat_playing.flag';
 
-  /// Get the app's private data directory path
-  /// This is accessible from both main isolate and background isolates
+  /// Get the app's cache directory path
+  /// Using cache dir because it's guaranteed to exist and be writable
   static String _getBasePath() {
     if (Platform.isAndroid) {
-      // Try multiple possible paths for compatibility across devices
-      // Most devices use /data/user/0, but some use /data/data
+      // Use cache directory which is guaranteed to exist
+      // Try multiple possible paths for compatibility
       final paths = [
+        '/data/user/0/com.kesholat.app/cache',
+        '/data/data/com.kesholat.app/cache',
         '/data/user/0/com.kesholat.app/files',
         '/data/data/com.kesholat.app/files',
       ];
 
       for (final path in paths) {
-        final dir = Directory(path);
-        if (dir.existsSync()) {
-          return path;
+        try {
+          final dir = Directory(path);
+          if (dir.existsSync()) {
+            debugPrint('StopFlagService: Using path: $path');
+            return path;
+          }
+        } catch (e) {
+          // Continue to next path
         }
       }
 
-      // Default to most common path
-      return '/data/user/0/com.kesholat.app/files';
+      // Default to cache path
+      return '/data/user/0/com.kesholat.app/cache';
     }
     return Directory.systemTemp.path;
   }

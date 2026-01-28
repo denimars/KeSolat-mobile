@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import '../domain/entities/location.dart' as app;
+import '../core/constants/app_constants.dart';
 
 class LocationService {
   Future<bool> checkPermission() async {
@@ -98,13 +99,10 @@ class LocationService {
   }
 
   double calculateQiblaDirection(double latitude, double longitude) {
-    const kaabaLat = 21.4225;
-    const kaabaLng = 39.8262;
-
     final latRad = latitude * (math.pi / 180);
     final lngRad = longitude * (math.pi / 180);
-    final kaabaLatRad = kaabaLat * (math.pi / 180);
-    final kaabaLngRad = kaabaLng * (math.pi / 180);
+    final kaabaLatRad = AppConstants.kaabaLatitude * (math.pi / 180);
+    final kaabaLngRad = AppConstants.kaabaLongitude * (math.pi / 180);
 
     final deltaLng = kaabaLngRad - lngRad;
 

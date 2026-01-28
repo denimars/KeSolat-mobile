@@ -59,13 +59,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
       final isPlaying = fileIsPlaying || prefsIsPlaying;
 
-      // Log every 5 seconds for debugging
-      if (DateTime.now().second % 5 == 0) {
-        debugPrint('HomeScreen: Status check - file=$fileIsPlaying, prefs=$prefsIsPlaying, current=$_isAdhanPlaying');
+      // Log every second when playing, every 5 seconds otherwise
+      final shouldLog = isPlaying || _isAdhanPlaying || DateTime.now().second % 5 == 0;
+      if (shouldLog) {
+        debugPrint('HomeScreen: [${DateTime.now().second}s] file=$fileIsPlaying, prefs=$prefsIsPlaying, showing=$_isAdhanPlaying');
       }
 
       if (isPlaying != _isAdhanPlaying) {
-        debugPrint('HomeScreen: *** ADHAN STATUS CHANGED *** file=$fileIsPlaying, prefs=$prefsIsPlaying, new=$isPlaying');
+        debugPrint('HomeScreen: *** STATUS CHANGED TO $isPlaying ***');
         if (mounted) {
           setState(() {
             _isAdhanPlaying = isPlaying;

@@ -324,10 +324,14 @@ Future<void> _onPrayerAlarmCallback(int alarmId) async {
       debugPrint('BackgroundService: ===== POLLING LOOP STARTED =====');
       debugPrint('BackgroundService: Checking stop flag at: $flagPath');
 
-      // Continue while audio is playing or buffering
-      while (audioPlayer.playing || audioPlayer.processingState == ProcessingState.buffering || audioPlayer.processingState == ProcessingState.loading) {
+      // Continue until audio is completed or idle (not just while playing)
+      // This prevents premature exit when audio focus is temporarily lost
+      while (true) {
         await Future.delayed(const Duration(milliseconds: 300));
         loopCount++;
+
+        final state = audioPlayer.processingState;
+        final isPlaying = audioPlayer.playing;
 
         // Check BOTH file-based flag AND SharedPreferences for maximum reliability
         final fileStopRequested = StopFlagService.isStopRequestedSync();
@@ -338,11 +342,12 @@ Future<void> _onPrayerAlarmCallback(int alarmId) async {
 
         final stopRequested = fileStopRequested || prefsStopRequested;
 
-        // Log every loop for debugging
-        if (loopCount % 10 == 0) { // Log every 3 seconds
-          debugPrint('BackgroundService: [Loop $loopCount] fileStop=$fileStopRequested, prefsStop=$prefsStopRequested');
+        // Log every 3 seconds for debugging
+        if (loopCount % 10 == 0) {
+          debugPrint('BackgroundService: [Loop $loopCount] playing=$isPlaying, state=$state, fileStop=$fileStopRequested, prefsStop=$prefsStopRequested');
         }
 
+        // Stop requested by user
         if (stopRequested) {
           debugPrint('BackgroundService: !!!!! STOP DETECTED - STOPPING AUDIO NOW !!!!!');
           await audioPlayer.stop();
@@ -352,10 +357,26 @@ Future<void> _onPrayerAlarmCallback(int alarmId) async {
           break;
         }
 
-        // Check if playback completed
-        if (audioPlayer.processingState == ProcessingState.completed) {
+        // Playback completed normally
+        if (state == ProcessingState.completed) {
           debugPrint('BackgroundService: Playback completed normally');
           break;
+        }
+
+        // Audio player is idle (stopped or error) - only exit if not playing
+        if (state == ProcessingState.idle && !isPlaying && loopCount > 10) {
+          debugPrint('BackgroundService: Audio player idle, exiting loop');
+          break;
+        }
+
+        // If audio focus was lost, try to resume playback
+        if (!isPlaying && (state == ProcessingState.ready || state == ProcessingState.buffering)) {
+          debugPrint('BackgroundService: Audio paused (focus lost?), attempting resume...');
+          try {
+            await audioPlayer.play();
+          } catch (e) {
+            debugPrint('BackgroundService: Resume failed: $e');
+          }
         }
 
         // Safety timeout after 10 minutes

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -10,6 +9,7 @@ import 'core/constants/app_constants.dart';
 import 'services/notification_service.dart';
 import 'services/background_service.dart';
 import 'services/audio_service.dart';
+import 'services/stop_flag_service.dart';
 import 'presentation/providers/prayer_provider.dart';
 import 'presentation/providers/settings_provider.dart';
 import 'presentation/providers/qibla_provider.dart';
@@ -21,9 +21,6 @@ void main() async {
   // Initialize date formatting for Indonesian locale
   await initializeDateFormatting('id_ID', null);
 
-  // Initialize Hive for local storage
-  await Hive.initFlutter();
-
   // Initialize services
   final notificationService = NotificationService();
   await notificationService.initialize();
@@ -32,9 +29,11 @@ void main() async {
   final audioService = AdhanAudioService();
   await audioService.initialize();
 
-  // Clear any stale playing flag from previous session
+  // Clear only stop request flag (not playing flag - adzan might be playing in background)
   final prefs = await SharedPreferences.getInstance();
-  await prefs.setBool('adhan_is_playing', false);
+  await prefs.setBool('adhan_stop_requested', false);
+  await StopFlagService.setStopRequested(false);
+  // Note: Don't clear 'adhan_is_playing' or playing flag - background service manages these
 
   // Initialize AlarmManager for prayer time alarms
   final backgroundService = BackgroundService();
@@ -51,13 +50,13 @@ void main() async {
   }
 
   // ============ TEST ALARM ============
- 
+  // Uncomment untuk test alarm. Ganti hour & minute sesuai kebutuhan.
   await backgroundService.scheduleTestAlarm(
-    hour: 13,
-    minute: 20,
-    prayerName: 'Subuh',
+    hour: 14,
+    minute: 13,
+    prayerName: 'Test Adzan',
   );
-  // ==================================== 
+  // ====================================
 
   // Set preferred orientations
   await SystemChrome.setPreferredOrientations([

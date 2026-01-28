@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_compass/flutter_compass.dart';
 import '../../services/location_service.dart';
@@ -53,7 +52,7 @@ class QiblaProvider extends ChangeNotifier {
       final location = await _locationService.getCurrentLocation();
       if (location != null) {
         _currentLocation = location;
-        _qiblaDirection = _calculateQiblaDirection(
+        _qiblaDirection = _locationService.calculateQiblaDirection(
           location.latitude,
           location.longitude,
         );
@@ -75,30 +74,6 @@ class QiblaProvider extends ChangeNotifier {
     });
   }
 
-  double _calculateQiblaDirection(double lat, double lng) {
-    const kaabaLat = 21.4225;
-    const kaabaLng = 39.8262;
-
-    final latRad = lat * (math.pi / 180);
-    final lngRad = lng * (math.pi / 180);
-    final kaabaLatRad = kaabaLat * (math.pi / 180);
-    final kaabaLngRad = kaabaLng * (math.pi / 180);
-
-    final deltaLng = kaabaLngRad - lngRad;
-
-    final y = math.sin(deltaLng);
-    final x = math.cos(latRad) * math.tan(kaabaLatRad) -
-        math.sin(latRad) * math.cos(deltaLng);
-
-    var qibla = math.atan2(y, x) * (180 / math.pi);
-
-    if (qibla < 0) {
-      qibla += 360;
-    }
-
-    return qibla;
-  }
-
   Future<void> refreshLocation() async {
     _isLoading = true;
     _error = null;
@@ -112,7 +87,7 @@ class QiblaProvider extends ChangeNotifier {
 
   void setLocation(Location location) {
     _currentLocation = location;
-    _qiblaDirection = _calculateQiblaDirection(
+    _qiblaDirection = _locationService.calculateQiblaDirection(
       location.latitude,
       location.longitude,
     );

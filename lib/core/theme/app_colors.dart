@@ -51,6 +51,4 @@ class AppColors {
   // Additional UI Colors
   static const Color divider = Color(0xFFE5E7EB);
   static const Color shadow = Color(0x1A000000);
-  static const Color shimmerBase = Color(0xFFE0E0E0);
-  static const Color shimmerHighlight = Color(0xFFF5F5F5);
 }
