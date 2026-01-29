@@ -18,53 +18,14 @@ import 'presentation/views/main/main_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize date formatting for Indonesian locale
+  // Essential initialization only - keep minimal for fast startup
   await initializeDateFormatting('id_ID', null);
 
-  // Initialize services
-  final notificationService = NotificationService();
-  await notificationService.initialize();
-  await notificationService.requestPermission();
-
-  final audioService = AdhanAudioService();
-  await audioService.initialize();
-
-  // Clear only stop request flag (not playing flag - adzan might be playing in background)
-  final prefs = await SharedPreferences.getInstance();
-  await prefs.setBool('adhan_stop_requested', false);
-  await StopFlagService.setStopRequested(false);
-  // Note: Don't clear 'adhan_is_playing' or playing flag - background service manages these
-
-  // Initialize AlarmManager for prayer time alarms
-  final backgroundService = BackgroundService();
-  await backgroundService.initialize();
-
-  // Schedule alarms if location exists and adhan is enabled
-  final hasLocation = prefs.getDouble(AppConstants.keyLatitude) != null &&
-      prefs.getDouble(AppConstants.keyLongitude) != null;
-  final adhanEnabled = prefs.getBool(AppConstants.keyAdhanEnabled) ?? true;
-
-  if (hasLocation && adhanEnabled) {
-    debugPrint('main: Location exists and adhan enabled, scheduling alarms...');
-    await backgroundService.scheduleAllPrayerAlarms();
-  }
-
-  // ============ TEST ALARM ============
-  // Uncomment untuk test alarm. Ganti hour & minute sesuai kebutuhan.
-  // await backgroundService.scheduleTestAlarm(
-  //   hour: 14,
-  //   minute: 13,
-  //   prayerName: 'Test Adzan',
-  // );
-  // ====================================
-
-  // Set preferred orientations
+  // Set UI preferences immediately
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
-
-  // Set system UI overlay style
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -73,7 +34,57 @@ void main() async {
     ),
   );
 
+  // Run app first, then initialize services in background
   runApp(const KeSholatApp());
+
+  // Initialize services after UI is shown (non-blocking)
+  _initializeServicesInBackground();
+}
+
+/// Initialize services after app is displayed to avoid blocking UI
+Future<void> _initializeServicesInBackground() async {
+  try {
+    // Small delay to let UI render first
+    await Future.delayed(const Duration(milliseconds: 100));
+
+    final notificationService = NotificationService();
+    await notificationService.initialize();
+    await notificationService.requestPermission();
+
+    final audioService = AdhanAudioService();
+    await audioService.initialize();
+
+    // Clear stop request flag
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('adhan_stop_requested', false);
+    await StopFlagService.setStopRequested(false);
+
+    // Initialize AlarmManager
+    final backgroundService = BackgroundService();
+    await backgroundService.initialize();
+
+    // Schedule alarms if location exists and adhan is enabled
+    final lat = prefs.getDouble(AppConstants.keyLatitude);
+    final lng = prefs.getDouble(AppConstants.keyLongitude);
+    final hasLocation = lat != null && lng != null;
+    final adhanEnabled = prefs.getBool(AppConstants.keyAdhanEnabled) ?? true;
+
+    debugPrint('main: hasLocation=$hasLocation, adhanEnabled=$adhanEnabled');
+
+    if (hasLocation && adhanEnabled) {
+      debugPrint('main: Scheduling prayer alarms...');
+      await backgroundService.scheduleAllPrayerAlarms();
+    }
+
+    // ============ TEST ALARM ============
+    // Test alarm 3 menit dari sekarang
+    await backgroundService.scheduleTestAlarmInMinutes(3);
+    // ====================================
+
+    debugPrint('main: Background initialization complete');
+  } catch (e) {
+    debugPrint('main: Error in background init: $e');
+  }
 }
 
 class KeSholatApp extends StatelessWidget {

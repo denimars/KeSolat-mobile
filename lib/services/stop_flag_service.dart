@@ -7,12 +7,15 @@ class StopFlagService {
   static const String _stopFileName = 'kesholat_stop.flag';
   static const String _playingFileName = 'kesholat_playing.flag';
 
+  static String? _cachedBasePath;
+
   /// Get the app's cache directory path
   /// Using cache dir because it's guaranteed to exist and be writable
   static String _getBasePath() {
+    // Return cached path to avoid repeated checks
+    if (_cachedBasePath != null) return _cachedBasePath!;
+
     if (Platform.isAndroid) {
-      // Use cache directory which is guaranteed to exist
-      // Try multiple possible paths for compatibility
       final paths = [
         '/data/user/0/com.kesholat.app/cache',
         '/data/data/com.kesholat.app/cache',
@@ -24,6 +27,7 @@ class StopFlagService {
         try {
           final dir = Directory(path);
           if (dir.existsSync()) {
+            _cachedBasePath = path;
             debugPrint('StopFlagService: Using path: $path');
             return path;
           }
@@ -32,10 +36,12 @@ class StopFlagService {
         }
       }
 
-      // Default to cache path
-      return '/data/user/0/com.kesholat.app/cache';
+      _cachedBasePath = '/data/user/0/com.kesholat.app/cache';
+      return _cachedBasePath!;
     }
-    return Directory.systemTemp.path;
+
+    _cachedBasePath = Directory.systemTemp.path;
+    return _cachedBasePath!;
   }
 
   /// Ensure base directory exists

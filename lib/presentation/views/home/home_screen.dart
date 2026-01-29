@@ -22,6 +22,8 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   bool _isAdhanPlaying = false;
   Timer? _adhanCheckTimer;
+  SharedPreferences? _prefs;
+  bool _isChecking = false;
 
   @override
   void initState() {
@@ -29,7 +31,7 @@ class _HomeScreenState extends State<HomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<PrayerProvider>().initialize();
     });
-    _startAdhanCheck();
+    _initPrefsAndStartCheck();
   }
 
   @override
@@ -38,35 +40,32 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  void _startAdhanCheck() {
-    // Check immediately
+  Future<void> _initPrefsAndStartCheck() async {
+    _prefs = await SharedPreferences.getInstance();
     _checkAdhanStatus();
-    // Then check periodically
-    _adhanCheckTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+    // Check every 2 seconds instead of 1 to reduce load
+    _adhanCheckTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       _checkAdhanStatus();
     });
   }
 
   Future<void> _checkAdhanStatus() async {
-    try {
-      // Check file-based flag
-      final fileIsPlaying = await StopFlagService.isPlaying();
+    // Prevent overlapping checks
+    if (_isChecking || _prefs == null) return;
+    _isChecking = true;
 
-      // Check SharedPreferences with fresh data
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.reload();
-      final prefsIsPlaying = prefs.getBool('adhan_is_playing') ?? false;
+    try {
+      // Use sync file check for speed
+      final fileIsPlaying = StopFlagService.isPlayingSync();
+
+      // Reload prefs to get fresh data from other isolates
+      await _prefs!.reload();
+      final prefsIsPlaying = _prefs!.getBool('adhan_is_playing') ?? false;
 
       final isPlaying = fileIsPlaying || prefsIsPlaying;
 
-      // Log every second when playing, every 5 seconds otherwise
-      final shouldLog = isPlaying || _isAdhanPlaying || DateTime.now().second % 5 == 0;
-      if (shouldLog) {
-        debugPrint('HomeScreen: [${DateTime.now().second}s] file=$fileIsPlaying, prefs=$prefsIsPlaying, showing=$_isAdhanPlaying');
-      }
-
       if (isPlaying != _isAdhanPlaying) {
-        debugPrint('HomeScreen: *** STATUS CHANGED TO $isPlaying ***');
+        debugPrint('HomeScreen: Status changed to $isPlaying (file=$fileIsPlaying, prefs=$prefsIsPlaying)');
         if (mounted) {
           setState(() {
             _isAdhanPlaying = isPlaying;
@@ -74,7 +73,9 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       }
     } catch (e) {
-      debugPrint('HomeScreen: Error checking adhan status: $e');
+      debugPrint('HomeScreen: Error: $e');
+    } finally {
+      _isChecking = false;
     }
   }
 

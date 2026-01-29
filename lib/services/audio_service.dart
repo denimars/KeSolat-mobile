@@ -121,15 +121,22 @@ class AdhanAudioService {
     debugPrint('AdhanAudioService: Initialized');
   }
 
+  bool? _cachedFileAvailable;
+
   Future<bool> isAdhanFileAvailable() async {
+    // Return cached result to avoid repeated heavy loads
+    if (_cachedFileAvailable != null) return _cachedFileAvailable!;
+
     try {
       final assetPath = 'assets/audio/${AppConstants.adhanFile}';
-      debugPrint('AdhanAudioService: Checking file availability: $assetPath');
-      await rootBundle.load(assetPath);
-      debugPrint('AdhanAudioService: File is available');
-      return true;
+      // Use loadString with a small test instead of loading entire file
+      final manifestContent = await rootBundle.loadString('AssetManifest.json');
+      _cachedFileAvailable = manifestContent.contains(assetPath);
+      debugPrint('AdhanAudioService: File available: $_cachedFileAvailable');
+      return _cachedFileAvailable!;
     } catch (e) {
-      debugPrint('AdhanAudioService: File not available - $e');
+      debugPrint('AdhanAudioService: File check error - $e');
+      _cachedFileAvailable = false;
       return false;
     }
   }
